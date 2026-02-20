@@ -1,4 +1,4 @@
-# track - Python Time Tracker CLI
+# track - Time Tracker CLI
 
 A lightweight CLI time tracker inspired by Watson.
 
