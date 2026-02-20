@@ -110,7 +110,7 @@ track delete --project myproject
 track delete --tag ABC-123
 
 # delete one session by ID
-track delete --session-id 42
+track delete --session 42
 ```
 
 ### Rename projects/tags
@@ -123,7 +123,7 @@ track rename --project oldproject --to newproject
 track rename --tag ABC-123 --to ABC-124
 
 # rename a tag in one specific session
-track rename --tag ABC-123 --to ABC-124 --session-id 42
+track rename --tag ABC-123 --to ABC-124 --session 42
 ```
 
 ## Data storage

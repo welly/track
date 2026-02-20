@@ -357,7 +357,7 @@ def cmd_delete(args: argparse.Namespace, store: Storage) -> None:
         if removed == 0:
             raise TrackError(f"Project '{args.project}' not found.")
     else:
-        raise TrackError("Provide --project, --tag, or --session-id.")
+        raise TrackError("Provide --project, --tag, or --session.")
 
     save_sessions(payload, remaining)
     store.save(payload)
@@ -438,13 +438,13 @@ def build_parser() -> argparse.ArgumentParser:
     delete = subparsers.add_parser("delete", help="Delete sessions")
     delete.add_argument("--project", help="Delete all sessions for a project")
     delete.add_argument("--tag", help="Delete sessions containing a tag")
-    delete.add_argument("--session-id", type=int, help="Delete a single session by id")
+    delete.add_argument("--session", type=int, help="Delete a single session by id")
     delete.set_defaults(func=cmd_delete)
 
     rename = subparsers.add_parser("rename", help="Rename a project or tag")
     rename.add_argument("--project", help="Old project name to rename")
     rename.add_argument("--tag", help="Old tag name to rename")
-    rename.add_argument("--session-id", type=int, help="Restrict tag rename to a specific session id")
+    rename.add_argument("--session", type=int, help="Restrict tag rename to a specific session id")
     rename.add_argument("--to", required=True, help="New name")
     rename.set_defaults(func=cmd_rename)
 

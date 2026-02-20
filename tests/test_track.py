@@ -84,7 +84,7 @@ class TrackTests(unittest.TestCase):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "p", "T1")
         self._add("2018-03-20 13:00:00", "2018-03-20 14:00:00", "p", "T2")
         self.assertEqual(track.main(["delete", "--tag", "T1"]), 0)
-        self.assertEqual(track.main(["delete", "--session-id", "2"]), 0)
+        self.assertEqual(track.main(["delete", "--session", "2"]), 0)
 
         stdout = StringIO()
         with redirect_stdout(stdout):
@@ -96,7 +96,7 @@ class TrackTests(unittest.TestCase):
         self._add("2018-03-20 13:00:00", "2018-03-20 14:00:00", "old-project", "OLD-TAG")
 
         self.assertEqual(track.main(["rename", "--project", "old-project", "--to", "new-project"]), 0)
-        self.assertEqual(track.main(["rename", "--tag", "OLD-TAG", "--to", "NEW-TAG", "--session-id", "1"]), 0)
+        self.assertEqual(track.main(["rename", "--tag", "OLD-TAG", "--to", "NEW-TAG", "--session", "1"]), 0)
 
         stdout = StringIO()
         with redirect_stdout(stdout):
