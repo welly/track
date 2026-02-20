@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--tag")
     report.add_argument("--from", dest="from_date", help="Filter report by start date (YYYY-MM-DD)")
     report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
+    report.add_argument("--exact", action="store_true", help="Show exact durations without rounding")
     report.set_defaults(func=cmd_report)
 
     sessions = subparsers.add_parser("sessions", help="List sessions")
@@ -58,6 +59,7 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--output", help="Output file path; if omitted, write to stdout")
     export.add_argument("--project")
     export.add_argument("--tag")
+    export.add_argument("--rounding", choices=["down", "up"], default="down", help="Round durations to 15-minute intervals")
     export.set_defaults(func=cmd_export)
 
     delete = subparsers.add_parser("delete", help="Delete sessions")

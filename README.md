@@ -78,9 +78,12 @@ track report
 track report --project myproject
 track report --project myproject --tag ABC-123
 track report --from 2014-04-01 --to 2014-04-30
+track report --exact
 ```
 
 Reports include the overall start/end datetime of the displayed data set.
+By default, durations are rounded to the nearest 15-minute interval (midpoint `:07:30` rounds up) and displayed as `HH:MM`.
+Use `--exact` to show unrounded durations as `HH:MM:SS`.
 
 ### Sessions
 
@@ -98,6 +101,7 @@ The sessions list shows the session ID, project, tags, start/end datetime, and d
 track export --format csv --output exports/report.csv
 track export --format json --output exports/report.json
 track export --format xml --output exports/report.xml
+track export --format json --rounding up
 ```
 
 To print export data directly to your terminal, omit `--output`:
@@ -112,7 +116,7 @@ You can combine export filters:
 track export --format csv --output exports/myproject.csv --project myproject --tag ABC-123
 ```
 
-All export formats include the session `id` for each row/entry.
+All export formats include the session `id` for each row/entry and `session_time` (rounded to 15-minute intervals via `--rounding down|up`, default: `down`), represented as decimal hours (for example: `0.25`, `0.5`, `0.75`, `1.25`).
 
 ### Delete sessions
 

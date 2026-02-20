@@ -50,3 +50,39 @@ def fmt_duration(delta: timedelta) -> str:
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+
+
+def fmt_duration_minutes(delta: timedelta) -> str:
+    total_minutes = int(delta.total_seconds()) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    return f"{hours:02d}:{minutes:02d}"
+
+
+def round_duration_to_interval(delta: timedelta, interval_minutes: int, mode: str) -> timedelta:
+    total_seconds = max(0, int(delta.total_seconds()))
+    interval_seconds = interval_minutes * 60
+    remainder = total_seconds % interval_seconds
+    if remainder == 0:
+        rounded_seconds = total_seconds
+    elif mode == "down":
+        rounded_seconds = total_seconds - remainder
+    elif mode == "up":
+        rounded_seconds = total_seconds + (interval_seconds - remainder)
+    else:
+        raise ValueError(f"Unsupported rounding mode: {mode}")
+
+    return timedelta(seconds=rounded_seconds)
+
+
+def round_duration_to_nearest_interval(delta: timedelta, interval_minutes: int) -> timedelta:
+    total_seconds = max(0, int(delta.total_seconds()))
+    interval_seconds = interval_minutes * 60
+    remainder = total_seconds % interval_seconds
+    halfway = interval_seconds / 2
+    if remainder == 0:
+        rounded_seconds = total_seconds
+    elif remainder < halfway:
+        rounded_seconds = total_seconds - remainder
+    else:
+        rounded_seconds = total_seconds + (interval_seconds - remainder)
+    return timedelta(seconds=rounded_seconds)
