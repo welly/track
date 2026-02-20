@@ -1,6 +1,7 @@
 from contextlib import redirect_stdout
 from datetime import timedelta
 from io import StringIO
+import json
 import os
 import tempfile
 import unittest
@@ -24,11 +25,25 @@ class TrackTests(unittest.TestCase):
             cmd += ["--tag", tag]
         self.assertEqual(track.main(cmd), 0)
 
+    def _session_ids(self) -> list[str]:
+        with open(self.data_file, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        return [entry["id"] for entry in payload.get("sessions", [])]
+
     def test_parse_duration_minutes(self):
         self.assertEqual(track.parse_duration("30 minutes"), timedelta(minutes=30))
 
     def test_parse_duration_hours_short(self):
         self.assertEqual(track.parse_duration("1.5h"), timedelta(hours=1.5))
+
+    def test_no_command_prints_help(self):
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main([]), 0)
+        out = stdout.getvalue()
+        self.assertIn("usage: track", out)
+        self.assertIn("start", out)
+        self.assertIn("sessions", out)
 
     def test_report_breakdown_and_date_range(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
@@ -62,12 +77,19 @@ class TrackTests(unittest.TestCase):
         stdout_json = StringIO()
         with redirect_stdout(stdout_json):
             self.assertEqual(track.main(["export", "--format", "json"]), 0)
-        self.assertIn('"id": 1', stdout_json.getvalue())
+        data = json.loads(stdout_json.getvalue())
+        self.assertEqual(len(data), 1)
+        self.assertRegex(data[0]["id"], r"^[0-9a-f]{8}$")
 
         stdout_csv = StringIO()
         with redirect_stdout(stdout_csv):
             self.assertEqual(track.main(["export", "--format", "csv"]), 0)
         self.assertIn("id,project,tags,start,end,duration_seconds", stdout_csv.getvalue())
+
+        stdout_xml = StringIO()
+        with redirect_stdout(stdout_xml):
+            self.assertEqual(track.main(["export", "--format", "xml"]), 0)
+        self.assertRegex(stdout_xml.getvalue(), r"<id>[0-9a-f]{8}</id>")
 
     def test_delete_project(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "proj-a", "A")
@@ -83,8 +105,9 @@ class TrackTests(unittest.TestCase):
     def test_delete_by_tag_and_session_id(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "p", "T1")
         self._add("2018-03-20 13:00:00", "2018-03-20 14:00:00", "p", "T2")
+        session_ids = self._session_ids()
         self.assertEqual(track.main(["delete", "--tag", "T1"]), 0)
-        self.assertEqual(track.main(["delete", "--session", "2"]), 0)
+        self.assertEqual(track.main(["delete", "--session", session_ids[1]]), 0)
 
         stdout = StringIO()
         with redirect_stdout(stdout):
@@ -94,9 +117,10 @@ class TrackTests(unittest.TestCase):
     def test_rename_project_and_tag(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "old-project", "OLD-TAG")
         self._add("2018-03-20 13:00:00", "2018-03-20 14:00:00", "old-project", "OLD-TAG")
+        session_ids = self._session_ids()
 
         self.assertEqual(track.main(["rename", "--project", "old-project", "--to", "new-project"]), 0)
-        self.assertEqual(track.main(["rename", "--tag", "OLD-TAG", "--to", "NEW-TAG", "--session", "1"]), 0)
+        self.assertEqual(track.main(["rename", "--tag", "OLD-TAG", "--to", "NEW-TAG", "--session", session_ids[0]]), 0)
 
         stdout = StringIO()
         with redirect_stdout(stdout):
@@ -104,6 +128,34 @@ class TrackTests(unittest.TestCase):
         out = stdout.getvalue()
         self.assertIn("NEW-TAG", out)
         self.assertIn("OLD-TAG", out)
+
+    def test_sessions_list_and_filters(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "alpha", "A-1")
+        self._add("2018-03-20 13:00:00", "2018-03-20 14:30:00", "beta", "B-1")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["sessions"]), 0)
+        out = stdout.getvalue()
+        self.assertIn("Sessions", out)
+        self.assertIn("alpha", out)
+        self.assertIn("beta", out)
+        self.assertIn("01:30:00", out)
+        for sid in self._session_ids():
+            self.assertRegex(sid, r"^[0-9a-f]{8}$")
+            self.assertIn(sid, out)
+
+        stdout_project = StringIO()
+        with redirect_stdout(stdout_project):
+            self.assertEqual(track.main(["sessions", "--project", "alpha"]), 0)
+        self.assertIn("alpha", stdout_project.getvalue())
+        self.assertNotIn("beta", stdout_project.getvalue())
+
+        stdout_tag = StringIO()
+        with redirect_stdout(stdout_tag):
+            self.assertEqual(track.main(["sessions", "--tag", "B-1"]), 0)
+        self.assertIn("beta", stdout_tag.getvalue())
+        self.assertNotIn("alpha", stdout_tag.getvalue())
 
 
 if __name__ == "__main__":
