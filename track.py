@@ -9,7 +9,7 @@ import os
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
@@ -77,6 +77,14 @@ def parse_datetime(value: str) -> datetime:
                 f"Invalid datetime '{value}'. Use '{DATETIME_FORMAT}' or ISO-8601 format."
             ) from exc
 
+
+
+
+def parse_date(value: str) -> date:
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError as exc:
+        raise TrackError(f"Invalid date '{value}'. Use 'YYYY-MM-DD'.") from exc
 
 def parse_duration(value: str) -> timedelta:
     normalized = value.strip().lower()
@@ -198,6 +206,17 @@ def fmt_duration(delta: timedelta) -> str:
 def cmd_report(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
     sessions = filter_sessions(get_sessions(payload), args.project, args.tag)
+
+    start_date = parse_date(args.from_date) if args.from_date else None
+    end_date = parse_date(args.to_date) if args.to_date else None
+    if start_date and end_date and start_date > end_date:
+        raise TrackError("--from date must be on or before --to date.")
+
+    if start_date:
+        sessions = [item for item in sessions if item.start.date() >= start_date]
+    if end_date:
+        sessions = [item for item in sessions if item.start.date() <= end_date]
+
     if not sessions:
         print("No sessions found.")
         return
@@ -211,7 +230,11 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
         for tag_name in tags:
             project_data[tag_name] = project_data.get(tag_name, timedelta()) + item.duration
 
+    earliest = min(item.start for item in sessions)
+    latest = max(item.end for item in sessions)
+
     print("Project report")
+    print(f"Date range: {earliest.strftime(DATETIME_FORMAT)} -> {latest.strftime(DATETIME_FORMAT)}")
     print("=" * 40)
     for project, project_data in sorted(by_project.items()):
         print(f"{project}")
@@ -291,6 +314,8 @@ def build_parser() -> argparse.ArgumentParser:
     report = subparsers.add_parser("report", help="Show time report")
     report.add_argument("--project")
     report.add_argument("--tag")
+    report.add_argument("--from", dest="from_date", help="Filter report by start date (YYYY-MM-DD)")
+    report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
     report.set_defaults(func=cmd_report)
 
     export = subparsers.add_parser("export", help="Export sessions")

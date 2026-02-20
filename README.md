@@ -75,7 +75,10 @@ This logs a session ending now and starting 30 minutes earlier.
 track report
 track report --project myproject
 track report --project myproject --tag ABC-123
+track report --from 2014-04-01 --to 2014-04-30
 ```
+
+Reports include the overall start/end datetime of the displayed data set.
 
 ### Export
 

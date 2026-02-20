@@ -129,6 +129,70 @@ class TrackTests(unittest.TestCase):
         self.assertIn("project,tags,start,end,duration_seconds", export_output)
         self.assertIn("myproject,ABC-123", export_output)
 
+    def test_report_shows_start_and_end_date_range(self):
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2018-03-20 12:00:00",
+                "--to",
+                "2018-03-20 13:00:00",
+                "--project",
+                "myproject",
+                "--tag",
+                "ABC-123",
+            ]),
+            0,
+        )
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report"]), 0)
+
+        report_output = stdout.getvalue()
+        self.assertIn("Date range: 2018-03-20 12:00:00 -> 2018-03-20 13:00:00", report_output)
+
+    def test_report_can_filter_by_date_range(self):
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2014-04-05 09:00:00",
+                "--to",
+                "2014-04-05 10:00:00",
+                "--project",
+                "alpha",
+                "--tag",
+                "A-1",
+            ]),
+            0,
+        )
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2014-05-05 09:00:00",
+                "--to",
+                "2014-05-05 10:00:00",
+                "--project",
+                "beta",
+                "--tag",
+                "B-1",
+            ]),
+            0,
+        )
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(
+                track.main(["report", "--from", "2014-04-01", "--to", "2014-04-30"]),
+                0,
+            )
+
+        report_output = stdout.getvalue()
+        self.assertIn("alpha", report_output)
+        self.assertNotIn("beta", report_output)
+
 
 if __name__ == "__main__":
     unittest.main()
