@@ -1,4 +1,4 @@
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timedelta
 from io import StringIO
 import json
@@ -36,6 +36,113 @@ class TrackTests(unittest.TestCase):
 
     def test_parse_duration_hours_short(self):
         self.assertEqual(track.parse_duration("1.5h"), timedelta(hours=1.5))
+
+    def test_add_normalizes_project_and_tag_names(self):
+        self.assertEqual(
+            track.main(
+                [
+                    "add",
+                    "--project",
+                    "My Project",
+                    "--tag",
+                    "ABC_123",
+                    "--from",
+                    "2018-03-20 12:00:00",
+                    "--to",
+                    "2018-03-20 12:30:00",
+                ]
+            ),
+            0,
+        )
+        with open(self.data_file, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        self.assertEqual(payload["sessions"][0]["project"], "my-project")
+        self.assertEqual(payload["sessions"][0]["tags"], ["abc-123"])
+
+    def test_add_rejects_invalid_project_name(self):
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            code = track.main(
+                ["add", "--project", "bad/project", "--from", "2018-03-20 12:00:00", "--to", "2018-03-20 12:30:00"]
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("Invalid project", stderr.getvalue())
+
+    def test_add_suggests_close_project_requires_force(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
+
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            code = track.main(
+                [
+                    "add",
+                    "--project",
+                    "myporject",
+                    "--from",
+                    "2018-03-20 13:00:00",
+                    "--to",
+                    "2018-03-20 13:30:00",
+                ]
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("close to existing project 'myproject'", stderr.getvalue())
+        self.assertIn("--force-new-project", stderr.getvalue())
+
+        self.assertEqual(
+            track.main(
+                [
+                    "add",
+                    "--project",
+                    "myporject",
+                    "--force-new-project",
+                    "--from",
+                    "2018-03-20 13:00:00",
+                    "--to",
+                    "2018-03-20 13:30:00",
+                ]
+            ),
+            0,
+        )
+
+    def test_add_suggests_close_tag_requires_force(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "abc-123")
+
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            code = track.main(
+                [
+                    "add",
+                    "--project",
+                    "myproject",
+                    "--tag",
+                    "abc-132",
+                    "--from",
+                    "2018-03-20 13:00:00",
+                    "--to",
+                    "2018-03-20 13:30:00",
+                ]
+            )
+        self.assertEqual(code, 1)
+        self.assertIn("close to existing tag 'abc-123'", stderr.getvalue())
+        self.assertIn("--force-new-tag", stderr.getvalue())
+
+        self.assertEqual(
+            track.main(
+                [
+                    "add",
+                    "--project",
+                    "myproject",
+                    "--tag",
+                    "abc-132",
+                    "--force-new-tag",
+                    "--from",
+                    "2018-03-20 13:00:00",
+                    "--to",
+                    "2018-03-20 13:30:00",
+                ]
+            ),
+            0,
+        )
 
     def test_status_no_active_timer(self):
         stdout = StringIO()
@@ -90,8 +197,8 @@ class TrackTests(unittest.TestCase):
 
         out = stdout.getvalue()
         self.assertIn("Date range: 2018-03-20 12:00:00 -> 2018-03-20 13:30:00", out)
-        self.assertIn("- ABC-123", out)
-        self.assertIn("- ABC-456", out)
+        self.assertIn("- abc-123", out)
+        self.assertIn("- abc-456", out)
         self.assertIn("Project total:", out)
         self.assertIn("01:30", out)
 
@@ -208,8 +315,8 @@ class TrackTests(unittest.TestCase):
         with redirect_stdout(stdout):
             self.assertEqual(track.main(["report", "--project", "new-project"]), 0)
         out = stdout.getvalue()
-        self.assertIn("NEW-TAG", out)
-        self.assertIn("OLD-TAG", out)
+        self.assertIn("new-tag", out)
+        self.assertIn("old-tag", out)
 
     def test_sessions_list_and_filters(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "alpha", "A-1")
