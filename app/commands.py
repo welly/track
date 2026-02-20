@@ -16,6 +16,29 @@ from .parsing import fmt_duration, parse_date, parse_datetime, parse_duration
 from .storage import Storage, load_sessions, next_session_id, save_sessions
 
 
+def humanize_elapsed(delta: timedelta) -> str:
+    total_seconds = max(0, int(delta.total_seconds()))
+    if total_seconds < 60:
+        return "less than a minute"
+
+    total_minutes = total_seconds // 60
+    if total_minutes == 1:
+        return "a minute"
+    if total_minutes < 60:
+        return f"{total_minutes} minutes"
+
+    total_hours = total_minutes // 60
+    if total_hours == 1:
+        return "an hour"
+    if total_hours < 24:
+        return f"{total_hours} hours"
+
+    total_days = total_hours // 24
+    if total_days == 1:
+        return "a day"
+    return f"{total_days} days"
+
+
 def cmd_start(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
     if payload.get("active"):
@@ -28,6 +51,31 @@ def cmd_start(args: argparse.Namespace, store: Storage) -> None:
     }
     store.save(payload)
     print(f"Started timer for project '{args.project}'.")
+
+
+def cmd_status(_: argparse.Namespace, store: Storage) -> None:
+    payload = store.load()
+    active = payload.get("active")
+    if not active:
+        print("No active timer.")
+        return
+
+    start_raw = active.get("start")
+    if not isinstance(start_raw, str):
+        raise TrackError("Active timer is missing a valid start time.")
+
+    start = datetime.fromisoformat(start_raw)
+    elapsed = datetime.now() - start
+    if elapsed < timedelta():
+        elapsed = timedelta()
+
+    tags = active.get("tags")
+    tag_text = ", ".join(tags) if isinstance(tags, list) and tags else "untagged"
+    start_text = start.strftime("%Y-%m-%d at %H:%M:%S")
+    print(
+        f"Project {active.get('project', '(unknown)')} ({tag_text}) "
+        f"started {humanize_elapsed(elapsed)} ago ({start_text})"
+    )
 
 
 def cmd_stop(_: argparse.Namespace, store: Storage) -> None:

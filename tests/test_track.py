@@ -1,8 +1,9 @@
 from contextlib import redirect_stdout
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import StringIO
 import json
 import os
+import re
 import tempfile
 import unittest
 
@@ -36,6 +37,40 @@ class TrackTests(unittest.TestCase):
     def test_parse_duration_hours_short(self):
         self.assertEqual(track.parse_duration("1.5h"), timedelta(hours=1.5))
 
+    def test_status_no_active_timer(self):
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["status"]), 0)
+        self.assertIn("No active timer.", stdout.getvalue())
+
+    def test_status_active_timer(self):
+        start = datetime.now() - timedelta(minutes=5, seconds=12)
+        payload = {"active": {"project": "myproject", "tags": ["ABC-123"], "start": start.isoformat()}, "sessions": []}
+        with open(self.data_file, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["status"]), 0)
+
+        out = stdout.getvalue()
+        self.assertRegex(
+            out,
+            r"Project myproject \(ABC-123\) started \d+ minutes ago "
+            r"\(\d{4}-\d{2}-\d{2} at \d{2}:\d{2}:\d{2}\)\n",
+        )
+
+    def test_status_active_timer_untagged(self):
+        start = datetime.now() - timedelta(minutes=2)
+        payload = {"active": {"project": "myproject", "tags": [], "start": start.isoformat()}, "sessions": []}
+        with open(self.data_file, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["status"]), 0)
+        self.assertIn("Project myproject (untagged)", stdout.getvalue())
+
     def test_no_command_prints_help(self):
         stdout = StringIO()
         with redirect_stdout(stdout):
@@ -43,6 +78,7 @@ class TrackTests(unittest.TestCase):
         out = stdout.getvalue()
         self.assertIn("usage: track", out)
         self.assertIn("start", out)
+        self.assertIn("status", out)
         self.assertIn("sessions", out)
 
     def test_report_breakdown_and_date_range(self):

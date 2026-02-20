@@ -23,6 +23,7 @@ pipx install .
 ## Features
 
 - Start/stop live timers per project.
+- Check current active timer status and elapsed time.
 - Add manual sessions by date range.
 - Add sessions by duration (e.g. `30 minutes`, `2h`).
 - Attach one or more tags (e.g. `ABC-123` JIRA ticket references).
@@ -48,6 +49,7 @@ python track.py <command> [options]
 
 ```bash
 track start --project myproject --tag ABC-123
+track status
 track stop
 ```
 
