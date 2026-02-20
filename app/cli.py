@@ -55,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     sessions.set_defaults(func=cmd_sessions)
 
     export = subparsers.add_parser("export", help="Export sessions")
-    export.add_argument("--format", choices=["json", "csv", "xml"], required=True)
+    export.add_argument("--format", choices=["json", "csv", "xml"], default="json")
     export.add_argument("--output", help="Output file path; if omitted, write to stdout")
     export.add_argument("--project")
     export.add_argument("--tag")

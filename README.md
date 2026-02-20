@@ -98,8 +98,8 @@ The sessions list shows the session ID, project, tags, start/end datetime, and d
 ### Export
 
 ```bash
+track export --output exports/report.json            # defaults to json
 track export --format csv --output exports/report.csv
-track export --format json --output exports/report.json
 track export --format xml --output exports/report.xml
 ```
 

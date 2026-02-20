@@ -110,6 +110,11 @@ class TrackTests(unittest.TestCase):
     def test_export_stdout_json_and_csv(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
 
+        stdout_json_default = StringIO()
+        with redirect_stdout(stdout_json_default):
+            self.assertEqual(track.main(["export"]), 0)
+        self.assertIn('"session_time": 1.0', stdout_json_default.getvalue())
+
         stdout_json = StringIO()
         with redirect_stdout(stdout_json):
             self.assertEqual(track.main(["export", "--format", "json"]), 0)
