@@ -10,6 +10,7 @@ from .commands import (
     cmd_rename,
     cmd_report,
     cmd_sessions,
+    cmd_status,
     cmd_start,
     cmd_stop,
 )
@@ -25,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--project", required=True)
     start.add_argument("--tag", action="append", help="Tag for the entry; may be repeated")
     start.set_defaults(func=cmd_start)
+
+    status = subparsers.add_parser("status", help="Show active timer status")
+    status.set_defaults(func=cmd_status)
 
     stop = subparsers.add_parser("stop", help="Stop the active timer")
     stop.set_defaults(func=cmd_stop)
