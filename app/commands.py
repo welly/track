@@ -12,7 +12,14 @@ from .constants import DATETIME_FORMAT
 from .errors import TrackError
 from .filters import filter_sessions
 from .models import Session
-from .parsing import fmt_duration, parse_date, parse_datetime, parse_duration
+from .parsing import (
+    fmt_duration,
+    fmt_duration_minutes,
+    parse_date,
+    parse_datetime,
+    parse_duration,
+    round_duration_to_nearest_interval,
+)
 from .storage import Storage, load_sessions, next_session_id, save_sessions
 
 
@@ -160,12 +167,13 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
 
     by_project: dict[str, dict[str, timedelta]] = {}
     for item in sessions:
+        duration = item.duration if args.exact else round_duration_to_nearest_interval(item.duration, interval_minutes=15)
         project_data = by_project.setdefault(item.project, {"__project_total__": timedelta()})
-        project_data["__project_total__"] = project_data["__project_total__"] + item.duration
+        project_data["__project_total__"] = project_data["__project_total__"] + duration
 
         tags = item.tags or ["(untagged)"]
         for tag_name in tags:
-            project_data[tag_name] = project_data.get(tag_name, timedelta()) + item.duration
+            project_data[tag_name] = project_data.get(tag_name, timedelta()) + duration
 
     earliest = min(item.start for item in sessions)
     latest = max(item.end for item in sessions)
@@ -176,12 +184,18 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
     for project, project_data in sorted(by_project.items()):
         print(project)
         for tag_name, total in sorted((k, v) for k, v in project_data.items() if k != "__project_total__"):
-            print(f"  - {tag_name:16} {fmt_duration(total)}")
-        print(f"  {'Project total:':18} {fmt_duration(project_data['__project_total__'])}")
+            display = fmt_duration(total) if args.exact else fmt_duration_minutes(total)
+            print(f"  - {tag_name:16} {display}")
+        project_total_display = fmt_duration(project_data["__project_total__"]) if args.exact else fmt_duration_minutes(project_data["__project_total__"])
+        print(f"  {'Project total:':18} {project_total_display}")
         print("-" * 40)
 
-    grand_total = sum((item.duration for item in sessions), timedelta())
-    print(f"{'GRAND TOTAL':20} {fmt_duration(grand_total)}")
+    grand_total = sum(
+        (item.duration if args.exact else round_duration_to_nearest_interval(item.duration, interval_minutes=15) for item in sessions),
+        timedelta(),
+    )
+    grand_total_display = fmt_duration(grand_total) if args.exact else fmt_duration_minutes(grand_total)
+    print(f"{'GRAND TOTAL':20} {grand_total_display}")
 
 
 def cmd_sessions(args: argparse.Namespace, store: Storage) -> None:
@@ -218,13 +232,19 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
 
     rendered: str
     if args.format == "json":
-        data = [item.to_dict() for item in sessions]
+        data = []
+        for item in sessions:
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
+            payload = item.to_dict()
+            payload["session_time"] = round((rounded_duration.total_seconds() / 3600), 2)
+            data.append(payload)
         rendered = json.dumps(data, indent=2)
     elif args.format == "csv":
         csv_buffer = io.StringIO()
-        writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "start", "end", "duration_seconds"])
+        writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "start", "end", "session_time"])
         writer.writeheader()
         for item in sessions:
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
             writer.writerow(
                 {
                     "id": item.id,
@@ -232,20 +252,21 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
                     "tags": ";".join(item.tags),
                     "start": item.start.isoformat(),
                     "end": item.end.isoformat(),
-                    "duration_seconds": int(item.duration.total_seconds()),
+                    "session_time": round((rounded_duration.total_seconds() / 3600), 2),
                 }
             )
         rendered = csv_buffer.getvalue()
     else:
         root = ET.Element("sessions")
         for item in sessions:
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
             node = ET.SubElement(root, "session")
             ET.SubElement(node, "id").text = item.id
             ET.SubElement(node, "project").text = item.project
             ET.SubElement(node, "tags").text = ",".join(item.tags)
             ET.SubElement(node, "start").text = item.start.isoformat()
             ET.SubElement(node, "end").text = item.end.isoformat()
-            ET.SubElement(node, "duration_seconds").text = str(int(item.duration.total_seconds()))
+            ET.SubElement(node, "session_time").text = str(round((rounded_duration.total_seconds() / 3600), 2))
 
         rendered = ET.tostring(root, encoding="unicode", xml_declaration=True)
 

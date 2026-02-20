@@ -46,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--tag")
     report.add_argument("--from", dest="from_date", help="Filter report by start date (YYYY-MM-DD)")
     report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
+    report.add_argument("--exact", action="store_true", help="Show exact durations without rounding")
     report.set_defaults(func=cmd_report)
 
     sessions = subparsers.add_parser("sessions", help="List sessions")
@@ -54,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     sessions.set_defaults(func=cmd_sessions)
 
     export = subparsers.add_parser("export", help="Export sessions")
-    export.add_argument("--format", choices=["json", "csv", "xml"], required=True)
+    export.add_argument("--format", choices=["json", "csv", "xml"], default="json")
     export.add_argument("--output", help="Output file path; if omitted, write to stdout")
     export.add_argument("--project")
     export.add_argument("--tag")

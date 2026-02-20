@@ -93,7 +93,7 @@ class TrackTests(unittest.TestCase):
         self.assertIn("- ABC-123", out)
         self.assertIn("- ABC-456", out)
         self.assertIn("Project total:", out)
-        self.assertIn("01:30:00", out)
+        self.assertIn("01:30", out)
 
     def test_report_date_filter(self):
         self._add("2014-04-05 09:00:00", "2014-04-05 10:00:00", "alpha", "A-1")
@@ -110,22 +110,51 @@ class TrackTests(unittest.TestCase):
     def test_export_stdout_json_and_csv(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
 
+        stdout_json_default = StringIO()
+        with redirect_stdout(stdout_json_default):
+            self.assertEqual(track.main(["export"]), 0)
+        self.assertIn('"session_time": 1.0', stdout_json_default.getvalue())
+
         stdout_json = StringIO()
         with redirect_stdout(stdout_json):
             self.assertEqual(track.main(["export", "--format", "json"]), 0)
         data = json.loads(stdout_json.getvalue())
         self.assertEqual(len(data), 1)
         self.assertRegex(data[0]["id"], r"^[0-9a-f]{8}$")
+        self.assertEqual(data[0]["session_time"], 1.0)
 
         stdout_csv = StringIO()
         with redirect_stdout(stdout_csv):
             self.assertEqual(track.main(["export", "--format", "csv"]), 0)
-        self.assertIn("id,project,tags,start,end,duration_seconds", stdout_csv.getvalue())
+        self.assertIn("id,project,tags,start,end,session_time", stdout_csv.getvalue())
 
         stdout_xml = StringIO()
         with redirect_stdout(stdout_xml):
             self.assertEqual(track.main(["export", "--format", "xml"]), 0)
         self.assertRegex(stdout_xml.getvalue(), r"<id>[0-9a-f]{8}</id>")
+        self.assertRegex(stdout_xml.getvalue(), r"<session_time>\d+(?:\.\d+)?</session_time>")
+
+    def test_report_rounding_nearest_and_exact(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:34:19", "myproject", "ABC-123")
+
+        stdout_rounded = StringIO()
+        with redirect_stdout(stdout_rounded):
+            self.assertEqual(track.main(["report", "--project", "myproject"]), 0)
+        self.assertIn("01:30", stdout_rounded.getvalue())
+
+        stdout_exact = StringIO()
+        with redirect_stdout(stdout_exact):
+            self.assertEqual(track.main(["report", "--project", "myproject", "--exact"]), 0)
+        self.assertIn("01:34:19", stdout_exact.getvalue())
+
+    def test_export_rounding_nearest(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:48:00", "myproject", "ABC-123")
+
+        stdout_json = StringIO()
+        with redirect_stdout(stdout_json):
+            self.assertEqual(track.main(["export", "--format", "json"]), 0)
+        data = json.loads(stdout_json.getvalue())
+        self.assertEqual(data[0]["session_time"], 1.75)
 
     def test_delete_project(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "proj-a", "A")
