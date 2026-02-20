@@ -85,6 +85,12 @@ track export --format json --output exports/report.json
 track export --format xml --output exports/report.xml
 ```
 
+To print export data directly to your terminal, omit `--output`:
+
+```bash
+track export --format json
+```
+
 You can combine export filters:
 
 ```bash

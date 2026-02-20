@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import re
@@ -201,44 +202,51 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
         print("No sessions found.")
         return
 
-    by_project: dict[str, timedelta] = {}
+    by_project: dict[str, dict[str, timedelta]] = {}
     for item in sessions:
-        by_project[item.project] = by_project.get(item.project, timedelta()) + item.duration
+        project_data = by_project.setdefault(item.project, {"__project_total__": timedelta()})
+        project_data["__project_total__"] = project_data["__project_total__"] + item.duration
+
+        tags = item.tags or ["(untagged)"]
+        for tag_name in tags:
+            project_data[tag_name] = project_data.get(tag_name, timedelta()) + item.duration
 
     print("Project report")
     print("=" * 40)
-    for project, total in sorted(by_project.items()):
-        print(f"{project:20} {fmt_duration(total)}")
+    for project, project_data in sorted(by_project.items()):
+        print(f"{project}")
+        for tag_name, total in sorted((k, v) for k, v in project_data.items() if k != "__project_total__"):
+            print(f"  - {tag_name:16} {fmt_duration(total)}")
+        print(f"  {'Project total:':18} {fmt_duration(project_data['__project_total__'])}")
+        print("-" * 40)
 
     grand_total = sum((item.duration for item in sessions), timedelta())
-    print("-" * 40)
-    print(f"{'TOTAL':20} {fmt_duration(grand_total)}")
+    print(f"{'GRAND TOTAL':20} {fmt_duration(grand_total)}")
 
 
 def cmd_export(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
     sessions = filter_sessions(get_sessions(payload), args.project, args.tag)
 
-    output = Path(args.output)
-    output.parent.mkdir(parents=True, exist_ok=True)
-
+    rendered: str
     if args.format == "json":
         data = [item.to_dict() for item in sessions]
-        output.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        rendered = json.dumps(data, indent=2)
     elif args.format == "csv":
-        with output.open("w", newline="", encoding="utf-8") as fh:
-            writer = csv.DictWriter(fh, fieldnames=["project", "tags", "start", "end", "duration_seconds"])
-            writer.writeheader()
-            for item in sessions:
-                writer.writerow(
-                    {
-                        "project": item.project,
-                        "tags": ";".join(item.tags),
-                        "start": item.start.isoformat(),
-                        "end": item.end.isoformat(),
-                        "duration_seconds": int(item.duration.total_seconds()),
-                    }
-                )
+        csv_buffer = io.StringIO()
+        writer = csv.DictWriter(csv_buffer, fieldnames=["project", "tags", "start", "end", "duration_seconds"])
+        writer.writeheader()
+        for item in sessions:
+            writer.writerow(
+                {
+                    "project": item.project,
+                    "tags": ";".join(item.tags),
+                    "start": item.start.isoformat(),
+                    "end": item.end.isoformat(),
+                    "duration_seconds": int(item.duration.total_seconds()),
+                }
+            )
+        rendered = csv_buffer.getvalue()
     else:
         root = ET.Element("sessions")
         for item in sessions:
@@ -249,10 +257,15 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
             ET.SubElement(node, "end").text = item.end.isoformat()
             ET.SubElement(node, "duration_seconds").text = str(int(item.duration.total_seconds()))
 
-        tree = ET.ElementTree(root)
-        tree.write(output, encoding="utf-8", xml_declaration=True)
+        rendered = ET.tostring(root, encoding="unicode", xml_declaration=True)
 
-    print(f"Exported {len(sessions)} sessions to {output} ({args.format}).")
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+        print(f"Exported {len(sessions)} sessions to {output} ({args.format}).")
+    else:
+        print(rendered)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -282,7 +295,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     export = subparsers.add_parser("export", help="Export sessions")
     export.add_argument("--format", choices=["json", "csv", "xml"], required=True)
-    export.add_argument("--output", required=True)
+    export.add_argument("--output", help="Output file path; if omitted, write to stdout")
     export.add_argument("--project")
     export.add_argument("--tag")
     export.set_defaults(func=cmd_export)

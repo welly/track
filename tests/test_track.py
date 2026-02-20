@@ -1,4 +1,6 @@
 from datetime import timedelta
+from io import StringIO
+from contextlib import redirect_stdout
 import os
 import tempfile
 import unittest
@@ -38,6 +40,94 @@ class TrackTests(unittest.TestCase):
 
         rc = track.main(["report", "--project", "myproject", "--tag", "ABC-123"])
         self.assertEqual(rc, 0)
+
+    def test_report_breaks_down_tags_and_project_total(self):
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2018-03-20 12:00:00",
+                "--to",
+                "2018-03-20 13:00:00",
+                "--project",
+                "myproject",
+                "--tag",
+                "ABC-123",
+            ]),
+            0,
+        )
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2018-03-20 13:00:00",
+                "--to",
+                "2018-03-20 13:30:00",
+                "--project",
+                "myproject",
+                "--tag",
+                "ABC-456",
+            ]),
+            0,
+        )
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report", "--project", "myproject"]), 0)
+
+        report_output = stdout.getvalue()
+        self.assertIn("- ABC-123", report_output)
+        self.assertIn("- ABC-456", report_output)
+        self.assertIn("Project total:", report_output)
+        self.assertIn("01:30:00", report_output)
+
+    def test_export_to_stdout_when_output_omitted_json(self):
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2018-03-20 12:00:00",
+                "--to",
+                "2018-03-20 13:00:00",
+                "--project",
+                "myproject",
+                "--tag",
+                "ABC-123",
+            ]),
+            0,
+        )
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["export", "--format", "json"]), 0)
+
+        export_output = stdout.getvalue()
+        self.assertIn('"project": "myproject"', export_output)
+        self.assertIn('"tags": [', export_output)
+
+    def test_export_to_stdout_when_output_omitted_csv(self):
+        self.assertEqual(
+            track.main([
+                "add",
+                "--from",
+                "2018-03-20 12:00:00",
+                "--to",
+                "2018-03-20 13:00:00",
+                "--project",
+                "myproject",
+                "--tag",
+                "ABC-123",
+            ]),
+            0,
+        )
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["export", "--format", "csv"]), 0)
+
+        export_output = stdout.getvalue()
+        self.assertIn("project,tags,start,end,duration_seconds", export_output)
+        self.assertIn("myproject,ABC-123", export_output)
 
 
 if __name__ == "__main__":
