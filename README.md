@@ -2,6 +2,8 @@
 
 A lightweight CLI time tracker inspired by Watson.
 
+Repository: https://github.com/welly/track
+
 ## Install
 
 Install locally from this repository:
@@ -93,7 +95,7 @@ track export --format csv --output exports/myproject.csv --project myproject --t
 
 By default, data is stored in:
 
-- `~/.timetracker/data.json`
+- `~/.track/data.json`
 
 Override location with environment variable:
 

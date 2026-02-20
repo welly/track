@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "timetracker-cli"
+name = "track"
 version = "0.1.0"
 description = "Watson-inspired Python CLI for tracking time by project and tags"
 readme = "README.md"
@@ -19,6 +19,10 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Environment :: Console"
 ]
+
+[project.urls]
+Homepage = "https://github.com/welly/track"
+Repository = "https://github.com/welly/track"
 
 [project.scripts]
 track = "track:main"

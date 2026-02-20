@@ -102,7 +102,7 @@ def resolve_store() -> Storage:
     env_path = os.getenv("TRACK_DATA_FILE")
     if env_path:
         return Storage(Path(env_path).expanduser())
-    return Storage(Path.home() / ".timetracker" / "data.json")
+    return Storage(Path.home() / ".track" / "data.json")
 
 
 def get_sessions(payload: dict[str, Any]) -> list[Session]:
