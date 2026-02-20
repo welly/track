@@ -25,6 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
     start = subparsers.add_parser("start", help="Start a timer")
     start.add_argument("--project", required=True)
     start.add_argument("--tag", action="append", help="Tag for the entry; may be repeated")
+    start.add_argument("--note", help="Optional note for the session")
     start.set_defaults(func=cmd_start)
 
     status = subparsers.add_parser("status", help="Show active timer status")
@@ -36,6 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     add = subparsers.add_parser("add", help="Add an entry by datetime range or duration")
     add.add_argument("--project", required=True)
     add.add_argument("--tag", action="append", help="Tag for the entry; may be repeated")
+    add.add_argument("--note", help="Optional note for the session")
     add.add_argument("--from", dest="from_time", help="Start datetime")
     add.add_argument("--to", help="End datetime")
     add.add_argument("--time", help="Duration (for example: '30 minutes' or '2h')")
