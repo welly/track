@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "timetracker-cli"
+version = "0.1.0"
+description = "Watson-inspired Python CLI for tracking time by project and tags"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Time Tracker Contributors" }
+]
+license = { text = "MIT" }
+keywords = ["time-tracking", "cli", "productivity"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console"
+]
+
+[project.scripts]
+track = "track:main"
+
+[tool.setuptools]
+py-modules = ["track"]
