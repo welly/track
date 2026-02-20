@@ -101,7 +101,6 @@ The sessions list shows the session ID, project, tags, start/end datetime, and d
 track export --format csv --output exports/report.csv
 track export --format json --output exports/report.json
 track export --format xml --output exports/report.xml
-track export --format json --rounding up
 ```
 
 To print export data directly to your terminal, omit `--output`:
@@ -116,7 +115,8 @@ You can combine export filters:
 track export --format csv --output exports/myproject.csv --project myproject --tag ABC-123
 ```
 
-All export formats include the session `id` for each row/entry and `session_time` (rounded to 15-minute intervals via `--rounding down|up`, default: `down`), represented as decimal hours (for example: `0.25`, `0.5`, `0.75`, `1.25`).
+All export formats include the session `id` for each row/entry and `session_time` represented as decimal hours (for example: `0.25`, `0.5`, `0.75`, `1.25`).
+`session_time` is always rounded to the nearest 15-minute interval using a 7m30s midpoint.
 
 ### Delete sessions
 

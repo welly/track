@@ -58,22 +58,6 @@ def fmt_duration_minutes(delta: timedelta) -> str:
     return f"{hours:02d}:{minutes:02d}"
 
 
-def round_duration_to_interval(delta: timedelta, interval_minutes: int, mode: str) -> timedelta:
-    total_seconds = max(0, int(delta.total_seconds()))
-    interval_seconds = interval_minutes * 60
-    remainder = total_seconds % interval_seconds
-    if remainder == 0:
-        rounded_seconds = total_seconds
-    elif mode == "down":
-        rounded_seconds = total_seconds - remainder
-    elif mode == "up":
-        rounded_seconds = total_seconds + (interval_seconds - remainder)
-    else:
-        raise ValueError(f"Unsupported rounding mode: {mode}")
-
-    return timedelta(seconds=rounded_seconds)
-
-
 def round_duration_to_nearest_interval(delta: timedelta, interval_minutes: int) -> timedelta:
     total_seconds = max(0, int(delta.total_seconds()))
     interval_seconds = interval_minutes * 60

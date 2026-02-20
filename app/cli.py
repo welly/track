@@ -59,7 +59,6 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--output", help="Output file path; if omitted, write to stdout")
     export.add_argument("--project")
     export.add_argument("--tag")
-    export.add_argument("--rounding", choices=["down", "up"], default="down", help="Round durations to 15-minute intervals")
     export.set_defaults(func=cmd_export)
 
     delete = subparsers.add_parser("delete", help="Delete sessions")

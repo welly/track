@@ -18,7 +18,6 @@ from .parsing import (
     parse_date,
     parse_datetime,
     parse_duration,
-    round_duration_to_interval,
     round_duration_to_nearest_interval,
 )
 from .storage import Storage, load_sessions, next_session_id, save_sessions
@@ -235,7 +234,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
     if args.format == "json":
         data = []
         for item in sessions:
-            rounded_duration = round_duration_to_interval(item.duration, interval_minutes=15, mode=args.rounding)
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
             payload = item.to_dict()
             payload["session_time"] = round((rounded_duration.total_seconds() / 3600), 2)
             data.append(payload)
@@ -245,7 +244,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
         writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "start", "end", "session_time"])
         writer.writeheader()
         for item in sessions:
-            rounded_duration = round_duration_to_interval(item.duration, interval_minutes=15, mode=args.rounding)
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
             writer.writerow(
                 {
                     "id": item.id,
@@ -260,7 +259,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
     else:
         root = ET.Element("sessions")
         for item in sessions:
-            rounded_duration = round_duration_to_interval(item.duration, interval_minutes=15, mode=args.rounding)
+            rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
             node = ET.SubElement(root, "session")
             ET.SubElement(node, "id").text = item.id
             ET.SubElement(node, "project").text = item.project

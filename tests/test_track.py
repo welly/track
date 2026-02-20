@@ -142,14 +142,14 @@ class TrackTests(unittest.TestCase):
             self.assertEqual(track.main(["report", "--project", "myproject", "--exact"]), 0)
         self.assertIn("01:34:19", stdout_exact.getvalue())
 
-    def test_export_rounding_up(self):
+    def test_export_rounding_nearest(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:48:00", "myproject", "ABC-123")
 
         stdout_json = StringIO()
         with redirect_stdout(stdout_json):
-            self.assertEqual(track.main(["export", "--format", "json", "--rounding", "up"]), 0)
+            self.assertEqual(track.main(["export", "--format", "json"]), 0)
         data = json.loads(stdout_json.getvalue())
-        self.assertEqual(data[0]["session_time"], 2.0)
+        self.assertEqual(data[0]["session_time"], 1.75)
 
     def test_delete_project(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "proj-a", "A")
