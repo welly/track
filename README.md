@@ -60,13 +60,15 @@ track add \
   --from "2018-03-20 12:00:00" \
   --to "2018-03-20 13:00:00" \
   --project myproject \
-  --tag ABC-123
+  --tag ABC-123 \
+  --note "Standup meeting"
 ```
 
 ### Add by duration (retroactive)
 
 ```bash
 track add --time "30 minutes" --project myproject --tag ABC-123
+track add --time "15 minutes" --project myproject --note "Standup meeting"
 ```
 
 This logs a session ending now and starting 30 minutes earlier.
@@ -93,7 +95,7 @@ track sessions --project myproject
 track sessions --tag ABC-123
 ```
 
-The sessions list shows the session ID, project, tags, start/end datetime, and duration (`HH:MM:SS`).
+The sessions list shows the session ID, project, tags, start/end datetime, duration (`HH:MM:SS`), and note.
 
 ### Export
 

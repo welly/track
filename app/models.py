@@ -10,6 +10,7 @@ class Session:
     id: str
     project: str
     tags: list[str]
+    note: str | None
     start: datetime
     end: datetime
 
@@ -18,6 +19,7 @@ class Session:
             "id": self.id,
             "project": self.project,
             "tags": self.tags,
+            "note": self.note,
             "start": self.start.isoformat(),
             "end": self.end.isoformat(),
         }
@@ -28,6 +30,7 @@ class Session:
             id=str(payload["id"]),
             project=payload["project"],
             tags=list(payload.get("tags", [])),
+            note=payload.get("note"),
             start=datetime.fromisoformat(payload["start"]),
             end=datetime.fromisoformat(payload["end"]),
         )
