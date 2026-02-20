@@ -26,7 +26,7 @@ pipx install .
 - Add manual sessions by date range.
 - Add sessions by duration (e.g. `30 minutes`, `2h`).
 - Attach one or more tags (e.g. `ABC-123` JIRA ticket references).
-- Store raw session data as JSON.
+- Store raw session data as JSON with stable session IDs.
 - Generate project reports with optional project/tag filters.
 - Export session data to JSON, CSV, or XML.
 
@@ -98,6 +98,32 @@ You can combine export filters:
 
 ```bash
 track export --format csv --output exports/myproject.csv --project myproject --tag ABC-123
+```
+
+### Delete sessions
+
+```bash
+# delete an entire project and all its sessions
+track delete --project myproject
+
+# delete all sessions containing a tag
+track delete --tag ABC-123
+
+# delete one session by ID
+track delete --session-id 42
+```
+
+### Rename projects/tags
+
+```bash
+# rename a project everywhere
+track rename --project oldproject --to newproject
+
+# rename a tag everywhere
+track rename --tag ABC-123 --to ABC-124
+
+# rename a tag in one specific session
+track rename --tag ABC-123 --to ABC-124 --session-id 42
 ```
 
 ## Data storage

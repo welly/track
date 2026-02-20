@@ -23,6 +23,7 @@ class TrackError(Exception):
 
 @dataclass
 class Session:
+    id: int
     project: str
     tags: list[str]
     start: datetime
@@ -30,6 +31,7 @@ class Session:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "id": self.id,
             "project": self.project,
             "tags": self.tags,
             "start": self.start.isoformat(),
@@ -39,6 +41,7 @@ class Session:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "Session":
         return cls(
+            id=int(payload["id"]),
             project=payload["project"],
             tags=list(payload.get("tags", [])),
             start=datetime.fromisoformat(payload["start"]),
@@ -78,13 +81,12 @@ def parse_datetime(value: str) -> datetime:
             ) from exc
 
 
-
-
 def parse_date(value: str) -> date:
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError as exc:
         raise TrackError(f"Invalid date '{value}'. Use 'YYYY-MM-DD'.") from exc
+
 
 def parse_duration(value: str) -> timedelta:
     normalized = value.strip().lower()
@@ -96,9 +98,7 @@ def parse_duration(value: str) -> timedelta:
 
     word_match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*(minute|minutes|hour|hours)", normalized)
     if not word_match:
-        raise TrackError(
-            "Invalid duration. Examples: '30 minutes', '1.5 hours', '45m', '2h'."
-        )
+        raise TrackError("Invalid duration. Examples: '30 minutes', '1.5 hours', '45m', '2h'.")
 
     amount = float(word_match.group(1))
     unit = word_match.group(2)
@@ -114,12 +114,42 @@ def resolve_store() -> Storage:
     return Storage(Path.home() / ".track" / "data.json")
 
 
-def get_sessions(payload: dict[str, Any]) -> list[Session]:
-    return [Session.from_dict(item) for item in payload.get("sessions", [])]
+def load_sessions(payload: dict[str, Any]) -> tuple[list[Session], bool]:
+    raw_sessions = payload.get("sessions", [])
+    used_ids: set[int] = set()
+    next_id = 1
+    changed = False
+
+    for item in raw_sessions:
+        sid = item.get("id")
+        if isinstance(sid, int) and sid > 0 and sid not in used_ids:
+            used_ids.add(sid)
+
+    sessions: list[Session] = []
+    for item in raw_sessions:
+        sid = item.get("id")
+        if not isinstance(sid, int) or sid <= 0 or sid in {s.id for s in sessions}:
+            while next_id in used_ids:
+                next_id += 1
+            sid = next_id
+            used_ids.add(sid)
+            next_id += 1
+            item["id"] = sid
+            changed = True
+
+        sessions.append(Session.from_dict(item))
+
+    return sessions, changed
 
 
 def save_sessions(payload: dict[str, Any], sessions: list[Session]) -> None:
     payload["sessions"] = [item.to_dict() for item in sessions]
+
+
+def next_session_id(sessions: list[Session]) -> int:
+    if not sessions:
+        return 1
+    return max(item.id for item in sessions) + 1
 
 
 def cmd_start(args: argparse.Namespace, store: Storage) -> None:
@@ -142,7 +172,12 @@ def cmd_stop(_: argparse.Namespace, store: Storage) -> None:
     if not active:
         raise TrackError("No active timer to stop.")
 
+    sessions, changed = load_sessions(payload)
+    if changed:
+        save_sessions(payload, sessions)
+
     session = Session(
+        id=next_session_id(sessions),
         project=active["project"],
         tags=active.get("tags", []),
         start=datetime.fromisoformat(active["start"]),
@@ -151,17 +186,17 @@ def cmd_stop(_: argparse.Namespace, store: Storage) -> None:
     if session.end <= session.start:
         raise TrackError("Stop time must be after start time.")
 
-    sessions = get_sessions(payload)
     sessions.append(session)
     save_sessions(payload, sessions)
     payload["active"] = None
     store.save(payload)
     minutes = session.duration.total_seconds() / 60
-    print(f"Stopped timer for project '{session.project}' ({minutes:.2f} minutes).")
+    print(f"Stopped timer for project '{session.project}' (session #{session.id}, {minutes:.2f} minutes).")
 
 
 def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
+    sessions, changed = load_sessions(payload)
 
     if args.time:
         delta = parse_duration(args.time)
@@ -176,13 +211,12 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     if end <= start:
         raise TrackError("End time must be after start time.")
 
-    session = Session(project=args.project, tags=args.tag or [], start=start, end=end)
-    sessions = get_sessions(payload)
-    sessions.append(session)
+    sessions.append(Session(id=next_session_id(sessions), project=args.project, tags=args.tag or [], start=start, end=end))
     save_sessions(payload, sessions)
     store.save(payload)
+    created = sessions[-1]
     print(
-        f"Added session for project '{args.project}' from {start.strftime(DATETIME_FORMAT)} "
+        f"Added session #{created.id} for project '{args.project}' from {start.strftime(DATETIME_FORMAT)} "
         f"to {end.strftime(DATETIME_FORMAT)}."
     )
 
@@ -205,7 +239,12 @@ def fmt_duration(delta: timedelta) -> str:
 
 def cmd_report(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
-    sessions = filter_sessions(get_sessions(payload), args.project, args.tag)
+    sessions, changed = load_sessions(payload)
+    if changed:
+        save_sessions(payload, sessions)
+        store.save(payload)
+
+    sessions = filter_sessions(sessions, args.project, args.tag)
 
     start_date = parse_date(args.from_date) if args.from_date else None
     end_date = parse_date(args.to_date) if args.to_date else None
@@ -237,7 +276,7 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
     print(f"Date range: {earliest.strftime(DATETIME_FORMAT)} -> {latest.strftime(DATETIME_FORMAT)}")
     print("=" * 40)
     for project, project_data in sorted(by_project.items()):
-        print(f"{project}")
+        print(project)
         for tag_name, total in sorted((k, v) for k, v in project_data.items() if k != "__project_total__"):
             print(f"  - {tag_name:16} {fmt_duration(total)}")
         print(f"  {'Project total:':18} {fmt_duration(project_data['__project_total__'])}")
@@ -249,7 +288,12 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
 
 def cmd_export(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
-    sessions = filter_sessions(get_sessions(payload), args.project, args.tag)
+    sessions, changed = load_sessions(payload)
+    if changed:
+        save_sessions(payload, sessions)
+        store.save(payload)
+
+    sessions = filter_sessions(sessions, args.project, args.tag)
 
     rendered: str
     if args.format == "json":
@@ -257,11 +301,12 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
         rendered = json.dumps(data, indent=2)
     elif args.format == "csv":
         csv_buffer = io.StringIO()
-        writer = csv.DictWriter(csv_buffer, fieldnames=["project", "tags", "start", "end", "duration_seconds"])
+        writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "start", "end", "duration_seconds"])
         writer.writeheader()
         for item in sessions:
             writer.writerow(
                 {
+                    "id": item.id,
                     "project": item.project,
                     "tags": ";".join(item.tags),
                     "start": item.start.isoformat(),
@@ -274,6 +319,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
         root = ET.Element("sessions")
         for item in sessions:
             node = ET.SubElement(root, "session")
+            ET.SubElement(node, "id").text = str(item.id)
             ET.SubElement(node, "project").text = item.project
             ET.SubElement(node, "tags").text = ",".join(item.tags)
             ET.SubElement(node, "start").text = item.start.isoformat()
@@ -289,6 +335,70 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
         print(f"Exported {len(sessions)} sessions to {output} ({args.format}).")
     else:
         print(rendered)
+
+
+def cmd_delete(args: argparse.Namespace, store: Storage) -> None:
+    payload = store.load()
+    sessions, _ = load_sessions(payload)
+
+    if args.session_id is not None:
+        remaining = [s for s in sessions if s.id != args.session_id]
+        removed = len(sessions) - len(remaining)
+        if removed == 0:
+            raise TrackError(f"Session id {args.session_id} not found.")
+    elif args.tag:
+        remaining = [s for s in sessions if not (args.tag in s.tags and (args.project is None or s.project == args.project))]
+        removed = len(sessions) - len(remaining)
+        if removed == 0:
+            raise TrackError("No sessions matched the requested tag/project filter.")
+    elif args.project:
+        remaining = [s for s in sessions if s.project != args.project]
+        removed = len(sessions) - len(remaining)
+        if removed == 0:
+            raise TrackError(f"Project '{args.project}' not found.")
+    else:
+        raise TrackError("Provide --project, --tag, or --session-id.")
+
+    save_sessions(payload, remaining)
+    store.save(payload)
+    print(f"Deleted {removed} session(s).")
+
+
+def cmd_rename(args: argparse.Namespace, store: Storage) -> None:
+    payload = store.load()
+    sessions, _ = load_sessions(payload)
+
+    if bool(args.project) == bool(args.tag):
+        raise TrackError("Provide exactly one of --project or --tag.")
+
+    changed = 0
+    if args.project:
+        for item in sessions:
+            if item.project == args.project:
+                item.project = args.to
+                changed += 1
+        if changed == 0:
+            raise TrackError(f"Project '{args.project}' not found.")
+    else:
+        if args.session_id is not None:
+            target = next((s for s in sessions if s.id == args.session_id), None)
+            if not target:
+                raise TrackError(f"Session id {args.session_id} not found.")
+            if args.tag not in target.tags:
+                raise TrackError(f"Tag '{args.tag}' not found in session id {args.session_id}.")
+            target.tags = [args.to if t == args.tag else t for t in target.tags]
+            changed = 1
+        else:
+            for item in sessions:
+                if args.tag in item.tags:
+                    item.tags = [args.to if t == args.tag else t for t in item.tags]
+                    changed += 1
+            if changed == 0:
+                raise TrackError(f"Tag '{args.tag}' not found.")
+
+    save_sessions(payload, sessions)
+    store.save(payload)
+    print(f"Updated {changed} session(s).")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -324,6 +434,19 @@ def build_parser() -> argparse.ArgumentParser:
     export.add_argument("--project")
     export.add_argument("--tag")
     export.set_defaults(func=cmd_export)
+
+    delete = subparsers.add_parser("delete", help="Delete sessions")
+    delete.add_argument("--project", help="Delete all sessions for a project")
+    delete.add_argument("--tag", help="Delete sessions containing a tag")
+    delete.add_argument("--session-id", type=int, help="Delete a single session by id")
+    delete.set_defaults(func=cmd_delete)
+
+    rename = subparsers.add_parser("rename", help="Rename a project or tag")
+    rename.add_argument("--project", help="Old project name to rename")
+    rename.add_argument("--tag", help="Old tag name to rename")
+    rename.add_argument("--session-id", type=int, help="Restrict tag rename to a specific session id")
+    rename.add_argument("--to", required=True, help="New name")
+    rename.set_defaults(func=cmd_rename)
 
     return parser
 
