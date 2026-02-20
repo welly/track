@@ -49,6 +49,7 @@ python track.py <command> [options]
 
 ```bash
 track start --project myproject --tag ABC-123
+track start --project "My Project" --tag "ABC_123"   # normalized to my-project / abc-123
 track status
 track stop
 ```
@@ -72,6 +73,13 @@ track add --time "15 minutes" --project myproject --note "Standup meeting"
 ```
 
 This logs a session ending now and starting 30 minutes earlier.
+
+### Name normalization and typo safety
+
+- Project and tag names are normalized to lowercase kebab-case (`my project` -> `my-project`, `ABC_123` -> `abc-123`).
+- Allowed characters after normalization are letters, numbers, and hyphens.
+- If a new project/tag looks very close to an existing one, `track` blocks it and suggests the closest match.
+- Use `--force-new-project` and/or `--force-new-tag` with `start`/`add` to intentionally create a close-but-new name.
 
 ### Reports
 

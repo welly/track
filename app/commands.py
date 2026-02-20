@@ -6,12 +6,14 @@ import io
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 import xml.etree.ElementTree as ET
 
 from .constants import DATETIME_FORMAT
 from .errors import TrackError
 from .filters import filter_sessions
 from .models import Session
+from .naming import normalize_name, suggest_close_match, validate_name
 from .parsing import (
     fmt_duration,
     fmt_duration_minutes,
@@ -46,14 +48,81 @@ def humanize_elapsed(delta: timedelta) -> str:
     return f"{total_days} days"
 
 
+def collect_known_names(sessions: list[Session], active: dict[str, Any] | None) -> tuple[set[str], set[str]]:
+    known_projects: set[str] = set()
+    known_tags: set[str] = set()
+
+    for item in sessions:
+        known_projects.add(normalize_name(item.project))
+        for tag_name in item.tags:
+            known_tags.add(normalize_name(tag_name))
+
+    if isinstance(active, dict):
+        project_value = active.get("project")
+        if isinstance(project_value, str):
+            known_projects.add(normalize_name(project_value))
+        for tag_value in active.get("tags", []):
+            if isinstance(tag_value, str):
+                known_tags.add(normalize_name(tag_value))
+
+    return {p for p in known_projects if p}, {t for t in known_tags if t}
+
+
+def normalize_project_input(
+    raw_project: str,
+    known_projects: set[str],
+    *,
+    force_new_project: bool,
+) -> str:
+    project = normalize_name(raw_project)
+    validate_name("project", project)
+    if project not in known_projects:
+        suggestion = suggest_close_match(project, known_projects)
+        if suggestion and suggestion != project and not force_new_project:
+            raise TrackError(
+                f"Project '{project}' is close to existing project '{suggestion}'. "
+                "Use --force-new-project to create it anyway."
+            )
+    return project
+
+
+def normalize_tag_inputs(
+    raw_tags: list[str],
+    known_tags: set[str],
+    *,
+    force_new_tag: bool,
+) -> list[str]:
+    normalized_tags: list[str] = []
+    for raw_tag in raw_tags:
+        tag = normalize_name(raw_tag)
+        validate_name("tag", tag)
+        if tag not in known_tags:
+            suggestion = suggest_close_match(tag, known_tags)
+            if suggestion and suggestion != tag and not force_new_tag:
+                raise TrackError(
+                    f"Tag '{tag}' is close to existing tag '{suggestion}'. "
+                    "Use --force-new-tag to create it anyway."
+                )
+        normalized_tags.append(tag)
+    return normalized_tags
+
+
 def cmd_start(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
     if payload.get("active"):
         raise TrackError("A timer is already running. Stop it before starting a new one.")
 
+    sessions, changed = load_sessions(payload)
+    if changed:
+        save_sessions(payload, sessions)
+
+    known_projects, known_tags = collect_known_names(sessions, payload.get("active"))
+    project = normalize_project_input(args.project, known_projects, force_new_project=args.force_new_project)
+    tags = normalize_tag_inputs(args.tag or [], known_tags, force_new_tag=args.force_new_tag)
+
     payload["active"] = {
-        "project": args.project,
-        "tags": args.tag or [],
+        "project": project,
+        "tags": tags,
         "note": args.note,
         "start": datetime.now().isoformat(),
     }
@@ -121,6 +190,10 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     if changed:
         save_sessions(payload, sessions)
 
+    known_projects, known_tags = collect_known_names(sessions, payload.get("active"))
+    project = normalize_project_input(args.project, known_projects, force_new_project=args.force_new_project)
+    tags = normalize_tag_inputs(args.tag or [], known_tags, force_new_tag=args.force_new_tag)
+
     if args.time:
         delta = parse_duration(args.time)
         end = datetime.now()
@@ -137,8 +210,8 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     sessions.append(
         Session(
             id=next_session_id(sessions),
-            project=args.project,
-            tags=args.tag or [],
+            project=project,
+            tags=tags,
             note=args.note,
             start=start,
             end=end,
@@ -148,7 +221,7 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     store.save(payload)
     created = sessions[-1]
     print(
-        f"Added session #{created.id} for project '{args.project}' from {start.strftime(DATETIME_FORMAT)} "
+        f"Added session #{created.id} for project '{project}' from {start.strftime(DATETIME_FORMAT)} "
         f"to {end.strftime(DATETIME_FORMAT)}."
     )
 
@@ -296,22 +369,31 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
 def cmd_delete(args: argparse.Namespace, store: Storage) -> None:
     payload = store.load()
     sessions, _ = load_sessions(payload)
+    project_filter = normalize_name(args.project) if args.project else None
+    tag_filter = normalize_name(args.tag) if args.tag else None
 
     if args.session_id is not None:
         remaining = [s for s in sessions if s.id != args.session_id]
         removed = len(sessions) - len(remaining)
         if removed == 0:
             raise TrackError(f"Session id {args.session_id} not found.")
-    elif args.tag:
-        remaining = [s for s in sessions if not (args.tag in s.tags and (args.project is None or s.project == args.project))]
+    elif tag_filter:
+        remaining = [
+            s
+            for s in sessions
+            if not (
+                any(normalize_name(session_tag) == tag_filter for session_tag in s.tags)
+                and (project_filter is None or normalize_name(s.project) == project_filter)
+            )
+        ]
         removed = len(sessions) - len(remaining)
         if removed == 0:
             raise TrackError("No sessions matched the requested tag/project filter.")
-    elif args.project:
-        remaining = [s for s in sessions if s.project != args.project]
+    elif project_filter:
+        remaining = [s for s in sessions if normalize_name(s.project) != project_filter]
         removed = len(sessions) - len(remaining)
         if removed == 0:
-            raise TrackError(f"Project '{args.project}' not found.")
+            raise TrackError(f"Project '{project_filter}' not found.")
     else:
         raise TrackError("Provide --project, --tag, or --session.")
 
@@ -329,28 +411,34 @@ def cmd_rename(args: argparse.Namespace, store: Storage) -> None:
 
     changed = 0
     if args.project:
+        from_project = normalize_name(args.project)
+        to_project = normalize_name(args.to)
+        validate_name("project", to_project)
         for item in sessions:
-            if item.project == args.project:
-                item.project = args.to
+            if normalize_name(item.project) == from_project:
+                item.project = to_project
                 changed += 1
         if changed == 0:
-            raise TrackError(f"Project '{args.project}' not found.")
+            raise TrackError(f"Project '{from_project}' not found.")
     else:
+        from_tag = normalize_name(args.tag)
+        to_tag = normalize_name(args.to)
+        validate_name("tag", to_tag)
         if args.session_id is not None:
             target = next((s for s in sessions if s.id == args.session_id), None)
             if not target:
                 raise TrackError(f"Session id {args.session_id} not found.")
-            if args.tag not in target.tags:
-                raise TrackError(f"Tag '{args.tag}' not found in session id {args.session_id}.")
-            target.tags = [args.to if t == args.tag else t for t in target.tags]
+            if not any(normalize_name(t) == from_tag for t in target.tags):
+                raise TrackError(f"Tag '{from_tag}' not found in session id {args.session_id}.")
+            target.tags = [to_tag if normalize_name(t) == from_tag else t for t in target.tags]
             changed = 1
         else:
             for item in sessions:
-                if args.tag in item.tags:
-                    item.tags = [args.to if t == args.tag else t for t in item.tags]
+                if any(normalize_name(t) == from_tag for t in item.tags):
+                    item.tags = [to_tag if normalize_name(t) == from_tag else t for t in item.tags]
                     changed += 1
             if changed == 0:
-                raise TrackError(f"Tag '{args.tag}' not found.")
+                raise TrackError(f"Tag '{from_tag}' not found.")
 
     save_sessions(payload, sessions)
     store.save(payload)
