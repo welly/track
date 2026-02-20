@@ -54,6 +54,7 @@ def cmd_start(args: argparse.Namespace, store: Storage) -> None:
     payload["active"] = {
         "project": args.project,
         "tags": args.tag or [],
+        "note": args.note,
         "start": datetime.now().isoformat(),
     }
     store.save(payload)
@@ -99,6 +100,7 @@ def cmd_stop(_: argparse.Namespace, store: Storage) -> None:
         id=next_session_id(sessions),
         project=active["project"],
         tags=active.get("tags", []),
+        note=active.get("note"),
         start=datetime.fromisoformat(active["start"]),
         end=datetime.now(),
     )
@@ -132,7 +134,16 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
     if end <= start:
         raise TrackError("End time must be after start time.")
 
-    sessions.append(Session(id=next_session_id(sessions), project=args.project, tags=args.tag or [], start=start, end=end))
+    sessions.append(
+        Session(
+            id=next_session_id(sessions),
+            project=args.project,
+            tags=args.tag or [],
+            note=args.note,
+            start=start,
+            end=end,
+        )
+    )
     save_sessions(payload, sessions)
     store.save(payload)
     created = sessions[-1]
@@ -214,10 +225,11 @@ def cmd_sessions(args: argparse.Namespace, store: Storage) -> None:
     print("=" * 80)
     for item in sorted(sessions, key=lambda s: (s.start, s.id)):
         tags = ", ".join(item.tags) if item.tags else "(untagged)"
+        note = item.note or ""
         print(
             f"{item.id}  {item.project:16} {tags:20} "
             f"{item.start.strftime(DATETIME_FORMAT)} -> {item.end.strftime(DATETIME_FORMAT)} "
-            f"{fmt_duration(item.duration)}"
+            f"{fmt_duration(item.duration)} {note}"
         )
 
 
@@ -241,7 +253,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
         rendered = json.dumps(data, indent=2)
     elif args.format == "csv":
         csv_buffer = io.StringIO()
-        writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "start", "end", "session_time"])
+        writer = csv.DictWriter(csv_buffer, fieldnames=["id", "project", "tags", "note", "start", "end", "session_time"])
         writer.writeheader()
         for item in sessions:
             rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
@@ -250,6 +262,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
                     "id": item.id,
                     "project": item.project,
                     "tags": ";".join(item.tags),
+                    "note": item.note or "",
                     "start": item.start.isoformat(),
                     "end": item.end.isoformat(),
                     "session_time": round((rounded_duration.total_seconds() / 3600), 2),
@@ -264,6 +277,7 @@ def cmd_export(args: argparse.Namespace, store: Storage) -> None:
             ET.SubElement(node, "id").text = item.id
             ET.SubElement(node, "project").text = item.project
             ET.SubElement(node, "tags").text = ",".join(item.tags)
+            ET.SubElement(node, "note").text = item.note or ""
             ET.SubElement(node, "start").text = item.start.isoformat()
             ET.SubElement(node, "end").text = item.end.isoformat()
             ET.SubElement(node, "session_time").text = str(round((rounded_duration.total_seconds() / 3600), 2))

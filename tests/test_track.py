@@ -126,13 +126,30 @@ class TrackTests(unittest.TestCase):
         stdout_csv = StringIO()
         with redirect_stdout(stdout_csv):
             self.assertEqual(track.main(["export", "--format", "csv"]), 0)
-        self.assertIn("id,project,tags,start,end,session_time", stdout_csv.getvalue())
+        self.assertIn("id,project,tags,note,start,end,session_time", stdout_csv.getvalue())
 
         stdout_xml = StringIO()
         with redirect_stdout(stdout_xml):
             self.assertEqual(track.main(["export", "--format", "xml"]), 0)
         self.assertRegex(stdout_xml.getvalue(), r"<id>[0-9a-f]{8}</id>")
         self.assertRegex(stdout_xml.getvalue(), r"<session_time>\d+(?:\.\d+)?</session_time>")
+
+    def test_add_note_saved_in_sessions_and_export(self):
+        self.assertEqual(
+            track.main(["add", "--project", "myproject", "--time", "15 minutes", "--note", "Standup meeting"]),
+            0,
+        )
+
+        sessions_out = StringIO()
+        with redirect_stdout(sessions_out):
+            self.assertEqual(track.main(["sessions", "--project", "myproject"]), 0)
+        self.assertIn("Standup meeting", sessions_out.getvalue())
+
+        export_out = StringIO()
+        with redirect_stdout(export_out):
+            self.assertEqual(track.main(["export"]), 0)
+        exported = json.loads(export_out.getvalue())
+        self.assertEqual(exported[0]["note"], "Standup meeting")
 
     def test_report_rounding_nearest_and_exact(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:34:19", "myproject", "ABC-123")
