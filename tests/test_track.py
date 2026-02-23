@@ -20,10 +20,12 @@ class TrackTests(unittest.TestCase):
         self.tmp.cleanup()
         os.environ.pop("TRACK_DATA_FILE", None)
 
-    def _add(self, start: str, end: str, project: str, tag: str | None = None) -> None:
+    def _add(self, start: str, end: str, project: str, tag: str | None = None, note: str | None = None) -> None:
         cmd = ["add", "--from", start, "--to", end, "--project", project]
         if tag:
             cmd += ["--tag", tag]
+        if note:
+            cmd += ["--note", note]
         self.assertEqual(track.main(cmd), 0)
 
     def _session_ids(self) -> list[str]:
@@ -104,27 +106,8 @@ class TrackTests(unittest.TestCase):
             0,
         )
 
-    def test_add_suggests_close_tag_requires_force(self):
+    def test_add_allows_new_close_tag_without_force(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "abc-123")
-
-        stderr = StringIO()
-        with redirect_stderr(stderr):
-            code = track.main(
-                [
-                    "add",
-                    "--project",
-                    "myproject",
-                    "--tag",
-                    "abc-132",
-                    "--from",
-                    "2018-03-20 13:00:00",
-                    "--to",
-                    "2018-03-20 13:30:00",
-                ]
-            )
-        self.assertEqual(code, 1)
-        self.assertIn("close to existing tag 'abc-123'", stderr.getvalue())
-        self.assertIn("--force-new-tag", stderr.getvalue())
 
         self.assertEqual(
             track.main(
@@ -134,7 +117,6 @@ class TrackTests(unittest.TestCase):
                     "myproject",
                     "--tag",
                     "abc-132",
-                    "--force-new-tag",
                     "--from",
                     "2018-03-20 13:00:00",
                     "--to",
@@ -143,6 +125,10 @@ class TrackTests(unittest.TestCase):
             ),
             0,
         )
+
+        with open(self.data_file, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        self.assertIn("abc-132", payload["sessions"][1]["tags"])
 
     def test_status_no_active_timer(self):
         stdout = StringIO()
@@ -189,11 +175,11 @@ class TrackTests(unittest.TestCase):
         self.assertIn("sessions", out)
 
     def test_report_breakdown_and_date_range(self):
-        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123", "Standup meeting")
         self._add("2018-03-20 13:00:00", "2018-03-20 13:30:00", "myproject", "ABC-456")
         stdout = StringIO()
         with redirect_stdout(stdout):
-            self.assertEqual(track.main(["report", "--project", "myproject"]), 0)
+            self.assertEqual(track.main(["report", "--project", "myproject", "--all"]), 0)
 
         out = stdout.getvalue()
         self.assertIn("Date range: 2018-03-20 12:00:00 -> 2018-03-20 13:30:00", out)
@@ -201,6 +187,14 @@ class TrackTests(unittest.TestCase):
         self.assertIn("- abc-456", out)
         self.assertIn("Project total:", out)
         self.assertIn("01:30", out)
+        self.assertNotIn("Session details", out)
+
+        stdout_notes = StringIO()
+        with redirect_stdout(stdout_notes):
+            self.assertEqual(track.main(["report", "--project", "myproject", "--all", "--notes"]), 0)
+        out_notes = stdout_notes.getvalue()
+        self.assertIn("Session details", out_notes)
+        self.assertIn("Standup meeting", out_notes)
 
     def test_report_date_filter(self):
         self._add("2014-04-05 09:00:00", "2014-04-05 10:00:00", "alpha", "A-1")
@@ -263,12 +257,12 @@ class TrackTests(unittest.TestCase):
 
         stdout_rounded = StringIO()
         with redirect_stdout(stdout_rounded):
-            self.assertEqual(track.main(["report", "--project", "myproject"]), 0)
+            self.assertEqual(track.main(["report", "--project", "myproject", "--all"]), 0)
         self.assertIn("01:30", stdout_rounded.getvalue())
 
         stdout_exact = StringIO()
         with redirect_stdout(stdout_exact):
-            self.assertEqual(track.main(["report", "--project", "myproject", "--exact"]), 0)
+            self.assertEqual(track.main(["report", "--project", "myproject", "--exact", "--all"]), 0)
         self.assertIn("01:34:19", stdout_exact.getvalue())
 
     def test_export_rounding_nearest(self):
@@ -287,7 +281,7 @@ class TrackTests(unittest.TestCase):
 
         stdout = StringIO()
         with redirect_stdout(stdout):
-            self.assertEqual(track.main(["report"]), 0)
+            self.assertEqual(track.main(["report", "--all"]), 0)
         self.assertNotIn("proj-a", stdout.getvalue())
         self.assertIn("proj-b", stdout.getvalue())
 
@@ -313,10 +307,40 @@ class TrackTests(unittest.TestCase):
 
         stdout = StringIO()
         with redirect_stdout(stdout):
-            self.assertEqual(track.main(["report", "--project", "new-project"]), 0)
+            self.assertEqual(track.main(["report", "--project", "new-project", "--all"]), 0)
         out = stdout.getvalue()
         self.assertIn("new-tag", out)
         self.assertIn("old-tag", out)
+
+    def test_report_defaults_to_current_week_monday(self):
+        today = datetime.now().date()
+        monday = today - timedelta(days=today.weekday())
+        before_week = monday - timedelta(days=1)
+
+        self._add(f"{before_week} 09:00:00", f"{before_week} 10:00:00", "weekproj", "before")
+        self._add(f"{monday} 09:00:00", f"{monday} 10:00:00", "weekproj", "inside")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report", "--project", "weekproj"]), 0)
+        out = stdout.getvalue()
+        self.assertIn("inside", out)
+        self.assertNotIn("before", out)
+
+    def test_report_all_includes_data_before_current_week(self):
+        today = datetime.now().date()
+        monday = today - timedelta(days=today.weekday())
+        before_week = monday - timedelta(days=1)
+
+        self._add(f"{before_week} 09:00:00", f"{before_week} 10:00:00", "weekproj", "before")
+        self._add(f"{monday} 09:00:00", f"{monday} 10:00:00", "weekproj", "inside")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report", "--project", "weekproj", "--all"]), 0)
+        out = stdout.getvalue()
+        self.assertIn("inside", out)
+        self.assertIn("before", out)
 
     def test_sessions_list_and_filters(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "alpha", "A-1")
@@ -330,6 +354,7 @@ class TrackTests(unittest.TestCase):
         self.assertIn("alpha", out)
         self.assertIn("beta", out)
         self.assertIn("01:30:00", out)
+        self.assertIn("session_time=1.5", out)
         for sid in self._session_ids():
             self.assertRegex(sid, r"^[0-9a-f]{8}$")
             self.assertIn(sid, out)

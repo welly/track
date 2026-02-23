@@ -27,7 +27,6 @@ def build_parser() -> argparse.ArgumentParser:
     start.add_argument("--tag", action="append", help="Tag for the entry; may be repeated")
     start.add_argument("--note", help="Optional note for the session")
     start.add_argument("--force-new-project", action="store_true", help="Allow creating a new project despite close-name suggestion")
-    start.add_argument("--force-new-tag", action="store_true", help="Allow creating a new tag despite close-name suggestion")
     start.set_defaults(func=cmd_start)
 
     status = subparsers.add_parser("status", help="Show active timer status")
@@ -41,7 +40,6 @@ def build_parser() -> argparse.ArgumentParser:
     add.add_argument("--tag", action="append", help="Tag for the entry; may be repeated")
     add.add_argument("--note", help="Optional note for the session")
     add.add_argument("--force-new-project", action="store_true", help="Allow creating a new project despite close-name suggestion")
-    add.add_argument("--force-new-tag", action="store_true", help="Allow creating a new tag despite close-name suggestion")
     add.add_argument("--from", dest="from_time", help="Start datetime")
     add.add_argument("--to", help="End datetime")
     add.add_argument("--time", help="Duration (for example: '30 minutes' or '2h')")
@@ -50,9 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
     report = subparsers.add_parser("report", help="Show time report")
     report.add_argument("--project")
     report.add_argument("--tag")
+    report.add_argument("--all", action="store_true", help="Show all sessions, ignoring default/current-week filter")
     report.add_argument("--from", dest="from_date", help="Filter report by start date (YYYY-MM-DD)")
     report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
     report.add_argument("--exact", action="store_true", help="Show exact durations without rounding")
+    report.add_argument("--notes", action="store_true", help="Include per-session details with note column")
     report.set_defaults(func=cmd_report)
 
     sessions = subparsers.add_parser("sessions", help="List sessions")

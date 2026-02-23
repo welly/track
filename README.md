@@ -78,22 +78,28 @@ This logs a session ending now and starting 30 minutes earlier.
 
 - Project and tag names are normalized to lowercase kebab-case (`my project` -> `my-project`, `ABC_123` -> `abc-123`).
 - Allowed characters after normalization are letters, numbers, and hyphens.
-- If a new project/tag looks very close to an existing one, `track` blocks it and suggests the closest match.
-- Use `--force-new-project` and/or `--force-new-tag` with `start`/`add` to intentionally create a close-but-new name.
+- If a new project looks very close to an existing one, `track` blocks it and suggests the closest match.
+- Use `--force-new-project` with `start`/`add` to intentionally create a close-but-new project name.
+- New tags are allowed as needed (tags are normalized/validated but not blocked by close-match checks).
 
 ### Reports
 
 ```bash
 track report
+track report --all
 track report --project myproject
 track report --project myproject --tag ABC-123
 track report --from 2014-04-01 --to 2014-04-30
 track report --exact
+track report --notes
 ```
 
 Reports include the overall start/end datetime of the displayed data set.
+By default, `track report` filters sessions from the Monday of the current week.
+Use `--all` to include all historical sessions.
 By default, durations are rounded to the nearest 15-minute interval (midpoint `:07:30` rounds up) and displayed as `HH:MM`.
 Use `--exact` to show unrounded durations as `HH:MM:SS`.
+Use `--notes` to include a per-session details section with note values.
 
 ### Sessions
 
@@ -103,7 +109,7 @@ track sessions --project myproject
 track sessions --tag ABC-123
 ```
 
-The sessions list shows the session ID, project, tags, start/end datetime, duration (`HH:MM:SS`), and note.
+The sessions list shows the session ID, project, tags, start/end datetime, duration (`HH:MM:SS`), `session_time` (rounded decimal hours), and note.
 
 ### Export
 
