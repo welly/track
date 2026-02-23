@@ -89,20 +89,11 @@ def normalize_project_input(
 def normalize_tag_inputs(
     raw_tags: list[str],
     known_tags: set[str],
-    *,
-    force_new_tag: bool,
 ) -> list[str]:
     normalized_tags: list[str] = []
     for raw_tag in raw_tags:
         tag = normalize_name(raw_tag)
         validate_name("tag", tag)
-        if tag not in known_tags:
-            suggestion = suggest_close_match(tag, known_tags)
-            if suggestion and suggestion != tag and not force_new_tag:
-                raise TrackError(
-                    f"Tag '{tag}' is close to existing tag '{suggestion}'. "
-                    "Use --force-new-tag to create it anyway."
-                )
         normalized_tags.append(tag)
     return normalized_tags
 
@@ -118,7 +109,7 @@ def cmd_start(args: argparse.Namespace, store: Storage) -> None:
 
     known_projects, known_tags = collect_known_names(sessions, payload.get("active"))
     project = normalize_project_input(args.project, known_projects, force_new_project=args.force_new_project)
-    tags = normalize_tag_inputs(args.tag or [], known_tags, force_new_tag=args.force_new_tag)
+    tags = normalize_tag_inputs(args.tag or [], known_tags)
 
     payload["active"] = {
         "project": project,
@@ -192,7 +183,7 @@ def cmd_add(args: argparse.Namespace, store: Storage) -> None:
 
     known_projects, known_tags = collect_known_names(sessions, payload.get("active"))
     project = normalize_project_input(args.project, known_projects, force_new_project=args.force_new_project)
-    tags = normalize_tag_inputs(args.tag or [], known_tags, force_new_tag=args.force_new_tag)
+    tags = normalize_tag_inputs(args.tag or [], known_tags)
 
     if args.time:
         delta = parse_duration(args.time)
@@ -235,8 +226,14 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
 
     sessions = filter_sessions(sessions, args.project, args.tag)
 
-    start_date = parse_date(args.from_date) if args.from_date else None
-    end_date = parse_date(args.to_date) if args.to_date else None
+    if args.all:
+        start_date = None
+        end_date = None
+    else:
+        today = datetime.now().date()
+        monday = today - timedelta(days=today.weekday())
+        start_date = parse_date(args.from_date) if args.from_date else monday
+        end_date = parse_date(args.to_date) if args.to_date else None
     if start_date and end_date and start_date > end_date:
         raise TrackError("--from date must be on or before --to date.")
 
@@ -274,6 +271,18 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
         print(f"  {'Project total:':18} {project_total_display}")
         print("-" * 40)
 
+    if args.notes:
+        print("Session details")
+        print(f"{'Project':16} {'Tag(s)':20} {'Time':8} Note")
+        for item in sorted(sessions, key=lambda s: (s.start, s.id)):
+            tags_display = ", ".join(item.tags) if item.tags else "(untagged)"
+            note_display = item.note or ""
+            time_display = fmt_duration(item.duration) if args.exact else fmt_duration_minutes(
+                round_duration_to_nearest_interval(item.duration, interval_minutes=15)
+            )
+            print(f"{item.project:16} {tags_display:20} {time_display:8} {note_display}")
+        print("-" * 40)
+
     grand_total = sum(
         (item.duration if args.exact else round_duration_to_nearest_interval(item.duration, interval_minutes=15) for item in sessions),
         timedelta(),
@@ -299,10 +308,12 @@ def cmd_sessions(args: argparse.Namespace, store: Storage) -> None:
     for item in sorted(sessions, key=lambda s: (s.start, s.id)):
         tags = ", ".join(item.tags) if item.tags else "(untagged)"
         note = item.note or ""
+        rounded_duration = round_duration_to_nearest_interval(item.duration, interval_minutes=15)
+        session_time = round((rounded_duration.total_seconds() / 3600), 2)
         print(
             f"{item.id}  {item.project:16} {tags:20} "
             f"{item.start.strftime(DATETIME_FORMAT)} -> {item.end.strftime(DATETIME_FORMAT)} "
-            f"{fmt_duration(item.duration)} {note}"
+            f"{fmt_duration(item.duration)} session_time={session_time} {note}"
         )
 
 
