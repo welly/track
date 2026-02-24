@@ -49,6 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--project")
     report.add_argument("--tag")
     report.add_argument("--all", action="store_true", help="Show all sessions, ignoring default/current-week filter")
+    report.add_argument("--today", action="store_true", help="Show only today's sessions")
     report.add_argument("--from", dest="from_date", help="Filter report by start date (YYYY-MM-DD)")
     report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
     report.add_argument("--exact", action="store_true", help="Show exact durations without rounding")

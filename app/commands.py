@@ -226,7 +226,11 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
 
     sessions = filter_sessions(sessions, args.project, args.tag)
 
-    if args.all:
+    if args.today:
+        today = datetime.now().date()
+        start_date = today
+        end_date = today
+    elif args.all:
         start_date = None
         end_date = None
     else:
