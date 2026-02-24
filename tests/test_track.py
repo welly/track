@@ -208,6 +208,24 @@ class TrackTests(unittest.TestCase):
         self.assertIn("alpha", out)
         self.assertNotIn("beta", out)
 
+    def test_report_today_limits_to_today(self):
+        today = datetime.now().date()
+        old_date = today - timedelta(days=3)
+
+        self._add(f"{old_date} 09:00:00", f"{old_date} 10:00:00", "todayproj", "old")
+        self._add(f"{today} 11:00:00", f"{today} 12:00:00", "todayproj", "today")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(
+                track.main(["report", "--project", "todayproj", "--from", str(old_date), "--today"]),
+                0,
+            )
+
+        out = stdout.getvalue()
+        self.assertIn("today", out)
+        self.assertNotIn("old", out)
+
     def test_export_stdout_json_and_csv(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "myproject", "ABC-123")
 
