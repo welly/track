@@ -265,6 +265,39 @@ class TrackTests(unittest.TestCase):
             self.assertEqual(track.main(["report", "--project", "myproject", "--exact", "--all"]), 0)
         self.assertIn("01:34:19", stdout_exact.getvalue())
 
+    def test_report_runn_uses_tag_or_note_grouped_by_project(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 12:30:00", "manifesto", note="Super standup")
+        self._add("2018-03-20 12:30:00", "2018-03-20 13:00:00", "manifesto", note="Squad 2 standup")
+        self._add("2018-03-20 13:00:00", "2018-03-20 14:00:00", "manifesto", note="Tech studio gathering")
+        self._add("2018-03-21 09:00:00", "2018-03-21 13:30:00", "gg", tag="GG-1248", note="Should not show")
+        self._add("2018-03-21 13:30:00", "2018-03-21 13:45:00", "gg", note="Internal/client comms")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report", "--all", "--format", "runn"]), 0)
+        out = stdout.getvalue()
+
+        self.assertIn("Project: manifesto", out)
+        self.assertIn("Super standup = 30 minutes", out)
+        self.assertIn("Squad 2 standup = 30 minutes", out)
+        self.assertIn("Tech studio gathering = 1 hour", out)
+        self.assertIn("Project: gg", out)
+        self.assertIn("gg-1248 = 4 hours 30 minutes", out)
+        self.assertIn("Internal/client comms = 15 minutes", out)
+        self.assertIn("Cumulative total = 6 hours 45 minutes", out)
+        self.assertNotIn("Should not show", out)
+
+    def test_report_runn_flag_shortcut(self):
+        self._add("2018-03-20 12:00:00", "2018-03-20 13:00:00", "proj", note="Meeting")
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            self.assertEqual(track.main(["report", "--all", "--runn"]), 0)
+        out = stdout.getvalue()
+        self.assertIn("Project: proj", out)
+        self.assertIn("Meeting = 1 hour", out)
+        self.assertIn("Cumulative total = 1 hour", out)
+
     def test_export_rounding_nearest(self):
         self._add("2018-03-20 12:00:00", "2018-03-20 13:48:00", "myproject", "ABC-123")
 

@@ -53,6 +53,17 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--to", dest="to_date", help="Filter report by end date (YYYY-MM-DD)")
     report.add_argument("--exact", action="store_true", help="Show exact durations without rounding")
     report.add_argument("--notes", action="store_true", help="Include per-session details with note column")
+    report.add_argument(
+        "--format",
+        choices=["default", "runn"],
+        default="default",
+        help="Report format (default or runn copy/paste style)",
+    )
+    report.add_argument(
+        "--runn",
+        action="store_true",
+        help="Shortcut for --format runn",
+    )
     report.set_defaults(func=cmd_report)
 
     sessions = subparsers.add_parser("sessions", help="List sessions")

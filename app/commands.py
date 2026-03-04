@@ -48,6 +48,43 @@ def humanize_elapsed(delta: timedelta) -> str:
     return f"{total_days} days"
 
 
+def fmt_duration_words(delta: timedelta) -> str:
+    total_minutes = int(delta.total_seconds()) // 60
+    hours, minutes = divmod(total_minutes, 60)
+    parts: list[str] = []
+    if hours:
+        parts.append(f"{hours} hour" if hours == 1 else f"{hours} hours")
+    if minutes:
+        parts.append(f"{minutes} minute" if minutes == 1 else f"{minutes} minutes")
+    if not parts:
+        return "0 minutes"
+    return " ".join(parts)
+
+
+def render_runn_report(sessions: list[Session], *, exact: bool) -> None:
+    by_project: dict[str, dict[str, timedelta]] = {}
+    cumulative_total = timedelta()
+    for item in sessions:
+        duration = item.duration if exact else round_duration_to_nearest_interval(item.duration, interval_minutes=15)
+        cumulative_total += duration
+        project_data = by_project.setdefault(item.project, {})
+        if item.tags:
+            label = ", ".join(item.tags)
+        elif item.note:
+            label = item.note
+        else:
+            label = "(untagged)"
+        project_data[label] = project_data.get(label, timedelta()) + duration
+
+    for project, labels in sorted(by_project.items()):
+        print(f"Project: {project}")
+        for label, total in sorted(labels.items()):
+            print(f"{label} = {fmt_duration_words(total)}")
+        print()
+
+    print(f"Cumulative total = {fmt_duration_words(cumulative_total)}")
+
+
 def collect_known_names(sessions: list[Session], active: dict[str, Any] | None) -> tuple[set[str], set[str]]:
     known_projects: set[str] = set()
     known_tags: set[str] = set()
@@ -244,6 +281,11 @@ def cmd_report(args: argparse.Namespace, store: Storage) -> None:
 
     if not sessions:
         print("No sessions found.")
+        return
+
+    output_format = "runn" if getattr(args, "runn", False) else getattr(args, "format", "default")
+    if output_format == "runn":
+        render_runn_report(sessions, exact=args.exact)
         return
 
     by_project: dict[str, dict[str, timedelta]] = {}

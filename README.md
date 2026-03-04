@@ -92,6 +92,8 @@ track report --project myproject --tag ABC-123
 track report --from 2014-04-01 --to 2014-04-30
 track report --exact
 track report --notes
+track report --format runn
+track report --runn
 ```
 
 Reports include the overall start/end datetime of the displayed data set.
@@ -100,6 +102,8 @@ Use `--all` to include all historical sessions.
 By default, durations are rounded to the nearest 15-minute interval (midpoint `:07:30` rounds up) and displayed as `HH:MM`.
 Use `--exact` to show unrounded durations as `HH:MM:SS`.
 Use `--notes` to include a per-session details section with note values.
+Use `--format runn` (or `--runn`) for copy/paste output grouped by project with lines like `GG-1248 = 4 hours 30 minutes`.
+In RUNN format, each line uses tag value when present; otherwise it uses the session note.
 
 ### Sessions
 
